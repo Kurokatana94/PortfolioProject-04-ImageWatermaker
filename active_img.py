@@ -19,7 +19,7 @@ def resize_image_to_frame(img, frame_width, frame_height, bg_color):
     resized_img = img.resize((new_width, new_height), Image.LANCZOS)
 
     # Create background image and paste resized image centered
-    final_img = Image.new("RGB", (frame_width, frame_height), bg_color)
+    final_img = Image.new("RGBA", (frame_width, frame_height), (9,9,9,0))
     paste_x = (frame_width - new_width) // 2
     paste_y = (frame_height - new_height) // 2
     final_img.paste(resized_img, (paste_x, paste_y))
@@ -35,10 +35,12 @@ class ActiveImg:
         self.img_frame = frame
         self.img = None
         self.img_label = None
+        self.original_img = None
         self.img_init()
 
     def img_init(self):
         placeholder_img = Image.open(self.img_path)
+        self.original_img = placeholder_img
         placeholder_resized = resize_image_to_frame(placeholder_img, self._FRAME_WIDTH, self._FRAME_HEIGHT,
                                                          self._BG_COLOR)
         self.img = ImageTk.PhotoImage(placeholder_resized)
@@ -54,6 +56,7 @@ class ActiveImg:
             try:
                 with urllib.request.urlopen(img_path) as file:
                     raw_img = Image.open(io.BytesIO(file.read()))
+                    self.original_img = raw_img
                     final_img = resize_image_to_frame(raw_img, self._FRAME_WIDTH, self._FRAME_HEIGHT, self._BG_COLOR)
                     return final_img
                     # Keep a reference
@@ -62,6 +65,7 @@ class ActiveImg:
         else:
             try:
                 raw_img = Image.open(img_path)
+                self.original_img = raw_img
                 final_img = resize_image_to_frame(raw_img, self._FRAME_WIDTH, self._FRAME_HEIGHT, self._BG_COLOR)
                 return final_img
             except Exception as e:
