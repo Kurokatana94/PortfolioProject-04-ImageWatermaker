@@ -4,11 +4,16 @@ import urllib.request
 import io
 
 class Watermark:
-    def __init__(self, img_frame, watermark_img_path='', watermark_text=''):
-        self.label = Label(img_frame, text='Hi')
+    def __init__(self, img_frame, watermark_img_path='', watermark_text='', font='', scale=1, color=(0,0,0,0)):
         self.pos = (0,0)
+        self.label = Label(img_frame, text='Hi')
+        #Image variable
         self.img_path = watermark_img_path
+        #Text watermark variables
         self.text = watermark_text
+        self.font = font
+        self.color = color
+        self.scale = scale
 
     def get_image(self, img_path=None):
         if img_path is None:
