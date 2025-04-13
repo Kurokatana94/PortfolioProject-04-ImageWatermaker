@@ -27,7 +27,7 @@ def resize_image_to_frame(img, frame_width, frame_height, bg_color):
 
 
 class ActiveImg:
-    def __init__(self, frame_width, frame_height, bg_color, frame, img_path ="./NeuroAssertsDominance.png"):
+    def __init__(self, frame_width, frame_height, bg_color, frame, img_path ="./nwero_likey.jpg"):
         self._FRAME_WIDTH = frame_width
         self._FRAME_HEIGHT = frame_height
         self._BG_COLOR = bg_color

@@ -33,12 +33,13 @@ def get_img_path():
 
 def get_watermarker_path():
     global watermark
-    watermark.text = ''
     watermark_txt_entry.delete(0, END)
-    watermark.img_path = askopenfile().name
-    img_path = watermark.img_path
+    on_focus_out(event=None, entry=watermark_txt_entry, text='Type Text here...')
+    watermark.text = ''
+    img_path = askopenfile()
+    watermark.img_path = img_path.name if img_path is not None else ''
     img_watermark_entry.delete(0, END)
-    img_watermark_entry.insert("end", img_path)
+    img_watermark_entry.insert("end", watermark.img_path)
 
 #Takes care of the drop in the main image entry loading the image in the frame
 def drop_img_inside_entry(event):
@@ -58,45 +59,13 @@ def drop_watermark_inside_entry(event):
     watermark.img_path = img_watermark_entry.get()
 
 #Lower the image opacity to makes it semi-transparent
-def get_semi_transparent_watermark(transparency=128):
+def get_semi_transparent_watermark(transparency):
     global watermark
     watermark_img = watermark.get_image().convert("RGBA")
     r, g, b, a = watermark_img.split()
     new_alpha = a.point(lambda p: int(p * (transparency / 255)))
     watermark_img.putalpha(new_alpha)
     return watermark_img
-
-#Moves the watermarker around on the image
-def move_watermark(event):
-    global img
-    global watermark
-    if watermark.text != '':
-        image_to_edit = active_img.get_image()
-        img = image_to_edit
-        watermark.pos = (event.x, event.y)
-        overlay = Image.new("RGBA", img.size, (255, 255, 255, 0))
-        draw = ImageDraw.Draw(overlay)
-        orig_font_size = int(font_size_box.get())
-        try:
-            font_family = font_type_box.get()
-            font_path = font_manager.findfont(font_family)
-            font = ImageFont.truetype(font_path, orig_font_size)
-        except Exception as e:
-            print("Text couldn't load for error: ", e)
-            font = ImageFont.load_default()
-        draw.text(watermark.pos, watermark.text, font=font, fill=(255, 255, 255, 128), anchor="mm")
-        composite = Image.alpha_composite(img, overlay)
-        active_img.show(composite)
-    elif watermark.img_path != '':
-        image_to_edit = active_img.get_image()
-        img = image_to_edit
-        foreground = get_semi_transparent_watermark(transparency=128)
-        watermark.pos = (event.x, event.y)
-        wm_width, wm_height = foreground.size
-        pos = (event.x - wm_width//2, event.y - wm_height//2)
-        image_to_edit.paste(foreground, pos, mask=foreground)
-        ImageDraw.Draw(img)
-        active_img.show(img)
 
 #They both load watermarker on screen
 def load_watermark_img():
@@ -117,8 +86,9 @@ def load_watermark_img():
 
 def load_watermark_text():
     global watermark
-    watermark.img_path = ''
     img_watermark_entry.delete(0, END)
+    on_focus_out(event=None, entry=img_watermark_entry, text='Drop Watermark here...')
+    watermark.img_path = ''
     text = watermark_txt_entry.get()
     if text_repeat.get() == 1:
         for n in range(333):
@@ -139,6 +109,58 @@ def load_watermark_text():
 
     move_watermark(dummy_event)
 
+def update_opacity(new_op):
+    watermark.opacity = int(new_op)
+    watermark.color = (watermark.color[0], watermark.color[1], watermark.color[2], watermark.opacity)
+
+    dummy_event = type("DummyEvent", (), {})()
+    dummy_event.x = watermark.pos[0]
+    dummy_event.y = watermark.pos[1]
+
+    move_watermark(dummy_event)
+
+def update_scale():
+    watermark.scale = float(wm_img_scale_box.get())
+
+    dummy_event = type("DummyEvent", (), {})()
+    dummy_event.x = watermark.pos[0]
+    dummy_event.y = watermark.pos[1]
+
+    move_watermark(dummy_event)
+
+#Moves the watermarker around on the image
+def move_watermark(event):
+    global img
+    global watermark
+    if watermark.text != '':
+        image_to_edit = active_img.get_image()
+        img = image_to_edit
+        watermark.pos = (event.x, event.y)
+        overlay = Image.new("RGBA", img.size, (255, 255, 255, 0))
+        draw = ImageDraw.Draw(overlay)
+        orig_font_size = int(font_size_box.get())
+        try:
+            font_family = font_type_box.get()
+            font_path = font_manager.findfont(font_family)
+            font = ImageFont.truetype(font_path, orig_font_size)
+        except Exception as e:
+            print("Text couldn't load for error: ", e)
+            font = ImageFont.load_default(size=orig_font_size)
+        draw.text(watermark.pos, watermark.text, font=font, fill=watermark.color, anchor="mm")
+        composite = Image.alpha_composite(img, overlay)
+        active_img.show(composite)
+    elif watermark.img_path != '' and watermark.img_path is not None:
+        image_to_edit = active_img.get_image()
+        img = image_to_edit
+        foreground = get_semi_transparent_watermark(transparency=watermark.opacity)
+        foreground = foreground.resize(size=(int(foreground.size[0] * watermark.scale), int(foreground.size[1] * watermark.scale)))
+        watermark.pos = (event.x, event.y)
+        wm_width, wm_height = foreground.size
+        pos = (int(event.x - wm_width//2), int(event.y - wm_height//2))
+        image_to_edit.paste(foreground, pos, mask=foreground)
+        ImageDraw.Draw(img)
+        active_img.show(img)
+
 #Formats and upscales the image and watermark to the final product before saving
 def format_image_to_save(_img, _watermark):
     original_img = active_img.original_img.convert("RGBA")
@@ -153,15 +175,15 @@ def format_image_to_save(_img, _watermark):
 
     upscaled_pos: tuple = int(_watermark.pos[0] * scale_x), int(_watermark.pos[1] * scale_y)
     overlay = Image.new("RGBA", (orig_width, orig_height), (255, 255, 255, 0))
-    if _watermark.img_path != '':
-        _watermark = get_semi_transparent_watermark(transparency=200)
+    if _watermark.img_path != '' and _watermark.img_path is not None:
+        _watermark = get_semi_transparent_watermark(transparency=watermark.opacity)
         wm_width, wm_height = _watermark.size
-        new_wm_width = int(wm_width * scale_x)
-        new_wm_height = int(wm_height * scale_y)
+        new_wm_width = int(wm_width * scale_x * watermark.scale)
+        new_wm_height = int(wm_height * scale_y * watermark.scale)
         _watermark = _watermark.resize((new_wm_width, new_wm_height), Image.LANCZOS)
-
         # Create a composite image
-        overlay.paste(_watermark, upscaled_pos, mask=_watermark)
+        centered_pos = (upscaled_pos[0] - new_wm_width // 2, upscaled_pos[1] - new_wm_height // 2)
+        overlay.paste(_watermark, centered_pos, mask=_watermark)
     elif _watermark.text != '':
         draw = ImageDraw.Draw(overlay)
         orig_font_size = int(int(font_size_box.get()) * scale_y)
@@ -171,9 +193,9 @@ def format_image_to_save(_img, _watermark):
             font = ImageFont.truetype(font_path, orig_font_size)
         except Exception as e:
             print("Text couldn't load for error: ", e)
-            font = ImageFont.load_default()
+            font = ImageFont.load_default(size=orig_font_size)
         # Create a composite image
-        draw.text(upscaled_pos, _watermark.text, font=font, fill=(255, 255, 255, 128), anchor="mm")
+        draw.text(upscaled_pos, _watermark.text, font=font, fill=watermark.color, anchor="mm")
 
     ImageDraw.Draw(overlay)
 
@@ -193,95 +215,159 @@ def save_watermark():
     final_image.save(file)
 
 #--------------------------UI----------------------------
-#TODO ADD LABELS AND BACKGROUND TEXT FOR ENTRIES
+
 #Window initial config------------------------------------
 window = TkinterDnD.Tk()
 window.minsize(IMG_FRAME_WIDTH+200, IMG_FRAME_HEIGHT+130)
 window.title("Image Watermarker")
-window.config(padx=100, pady=50, bg=BACKGROUND_COLOR)
+window.config(padx=30, pady=24, bg=BACKGROUND_COLOR)
 window.grid_rowconfigure(0, weight=1)
 window.grid_columnconfigure(0, weight=1)
 window.resizable(False, False)
 
 # Central frame------------------------------
 img_frame = Frame(window, width=IMG_FRAME_WIDTH, height=IMG_FRAME_HEIGHT, bg=FRAME_BG_COLOR)
-img_frame.grid(column=0, columnspan=8, row=0)
+img_frame.grid(column=1, columnspan=9, row=0)
 img_frame.grid_propagate(False)  # Prevent resizing
 
 #Init of image instance in frame (a placeholder image is loaded first)------------------------------
-active_img = ActiveImg(frame_width=IMG_FRAME_WIDTH, frame_height=IMG_FRAME_HEIGHT, bg_color=FRAME_BG_COLOR, frame=img_frame)
+active_img = ActiveImg(frame_width=IMG_FRAME_WIDTH, frame_height=IMG_FRAME_HEIGHT, bg_color=FRAME_BG_COLOR,
+                       frame=img_frame)
+
+options_spacer = Label(window, width=24, background=BACKGROUND_COLOR)
+options_spacer.grid(column=0, row=1, columnspan=9)
+
+#Entries placeholders
+def on_entry_click(event, entry, text):
+    if entry.get() == text:
+        entry.delete(0, tk.END)
+        entry.config(foreground="black")
+
+def on_focus_out(event, entry, text):
+    if entry.get() == "":
+        entry.insert(0, text)
+        entry.config(foreground="gray")
 
 #Entry widget that allows to drag and drop--------------------------
-path_entry = Entry(window)
-path_entry.grid(column=0, row=1)
+path_entry_label = Label(window, text='Insert Image:', justify=LEFT, background=BACKGROUND_COLOR)
+path_entry_label.grid(column=1, row=2, sticky=W)
+
+path_entry = Entry(window, width=38, justify=LEFT, foreground="gray")
+path_entry.grid(column=1, row=3)
+path_entry.insert(END, 'Drop Image here...')
+path_entry.bind("<FocusIn>", lambda event: on_entry_click(event, path_entry, 'Drop Image here...'))
+path_entry.bind("<FocusOut>", lambda event: on_focus_out(event, path_entry, 'Drop Image here...'))
 path_entry.drop_target_register(DND_ALL)
 path_entry.dnd_bind("<<Drop>>", drop_img_inside_entry)
 
 #Button to open file explorer
-get_img_path_button = Button(text='...', command=get_img_path)
-get_img_path_button.grid(column=1, row=1)
+get_img_path_button = Button(text='...', command=get_img_path, anchor='w')
+get_img_path_button.grid(column=2, row=3)
 
 #Loads image from the inserted path
-open_img_button = Button(text='Open', command=active_img.show)
-open_img_button.grid(column=2, row=1)
+open_img_button = Button(text='Open', command=active_img.show, anchor='w')
+open_img_button.grid(column=3, row=3)
+
+#Spacer I had to add to push the path entry and its buttons on the left side-----------------------------------
+spacer = Label(window, width=21, text='\n\n\n\n\n\n', background=BACKGROUND_COLOR)
+spacer.grid(column=4, row=1,rowspan=5)
 
 #Watermark section---------------------------
 # Watermark
 watermark = Watermark(img_frame)
 
+#Slider to control opacity of both text and image watermarks
+opacity_spacer = Label(window, text='\n', width=12, background=BACKGROUND_COLOR)
+opacity_spacer.grid(column=0, row=0)
+opacity_slider = Scale(window, from_=0, to=255, command=update_opacity, background=BACKGROUND_COLOR, length=300, label='Opacity', bd=1, sliderrelief='ridge', highlightthickness=0)
+opacity_slider.set(128)
+opacity_slider.grid(column=10, row=0)
+
+#Image
+wm_entry_label = Label(window, text='Insert Watermark:', justify=LEFT, background=BACKGROUND_COLOR)
+wm_entry_label.grid(column=5, row=2, sticky=W)
+
+img_watermark_entry = Entry(window, width=38, foreground='gray')
+img_watermark_entry.grid(column=5, row=3, columnspan=2)
+img_watermark_entry.insert(END, 'Drop Watermark here...')
+img_watermark_entry.bind("<FocusIn>", lambda event: on_entry_click(event, img_watermark_entry, 'Drop Watermark here...'))
+img_watermark_entry.bind("<FocusOut>", lambda event: on_focus_out(event, img_watermark_entry, 'Drop Watermark here...'))
+img_watermark_entry.drop_target_register(DND_ALL)
+img_watermark_entry.dnd_bind("<<Drop>>", drop_watermark_inside_entry)
+
+get_watermark_path_button = Button(text='...', command=get_watermarker_path)
+get_watermark_path_button.grid(column=7, row=3)
+
+open_img_watermark = Button(text='Open', command=load_watermark_img, width=6)
+open_img_watermark.grid(column=9, row=3)
+
+wm_scale_label = Label(window, text='Scale:', justify=LEFT, background=BACKGROUND_COLOR)
+wm_scale_label.grid(column=8, row=2, sticky=W)
+
+wm_img_scale_box = Spinbox(window, from_=0.01, to=10, increment=.05, width=4, command=update_scale)
+wm_img_scale_box.delete(0, END)
+wm_img_scale_box.insert(END, '1.0')
+wm_img_scale_box.grid(column=8, row=3)
+
 #Text
-watermark_txt_entry = Entry(window)
-watermark_txt_entry.grid(column=4, row=2)
-confirm_txt_watermark = Button(text='Confirm', command=load_watermark_text)
-confirm_txt_watermark.grid(column=5, row=2)
+wm_text_label = Label(window, text='Type Text as Watermark:', justify=LEFT, background=BACKGROUND_COLOR)
+wm_text_label.grid(column=5, row=4, sticky=W)
+
+watermark_txt_entry = Entry(window, width=38, foreground='gray')
+watermark_txt_entry.grid(column=5, row=5, columnspan=2)
+watermark_txt_entry.insert(END, 'Type Text here...')
+watermark_txt_entry.bind("<FocusIn>", lambda event: on_entry_click(event, watermark_txt_entry, 'Type Text here...'))
+watermark_txt_entry.bind("<FocusOut>", lambda event: on_focus_out(event, watermark_txt_entry, 'Type Text here...'))
+
+confirm_txt_watermark = Button(text='Confirm', height=2, command=load_watermark_text)
+confirm_txt_watermark.grid(column=9, row=5, rowspan=2)
 
 #Text options
 def load_working_fonts():
     fonts = []
     for font in tk_font.families():
         try:
-            if font_manager.findfont(font):
+            font_path = font_manager.findfont(font, fallback_to_default=False)
+            if font_path:
+                print(font_path)
                 fonts.append(font)
         except Exception as e:
             print("Couldn't load font due to error: ", e)
     return fonts
 
-font_type_box = Combobox(window, values=load_working_fonts())
+font_type_box = Combobox(window, values=load_working_fonts(), width=30)
 font_type_box.insert("end", 'Arial')
 font_type_box.config(state="readonly")
-font_type_box.grid(column=3, row=3)
+font_type_box.grid(column=5, row=6)
 
-font_size_box = Spinbox(window, from_=2, to=999)
+font_size_box = Spinbox(window, from_=2, to=999, width=3)
 font_size_box.delete(0, END)
 font_size_box.insert("end", '60')
-font_size_box.grid(column=4, row=3)
+font_size_box.grid(column=6, row=6)
+
+def load_color():
+    color = askcolor()
+    if color:
+        watermark.color = (color[0][0], color[0][1], color[0][2], 128)
+        wm_color_choice_button.config(background=color[1])
+
+wm_color_choice_button = Button(command=load_color, text='Color', background='#fff', width=6)
+wm_color_choice_button.grid(column=7, row=6, columnspan=2)
 
 #Multiplies the text if checked to cover the whole screen
 text_repeat = IntVar()
 check_repeat = Checkbutton(window, background=BACKGROUND_COLOR, activebackground=BACKGROUND_COLOR, variable=text_repeat, text='Repeat')
-check_repeat.grid(column=6, row=2)
-
-#Image
-img_watermark_entry = Entry(window)
-img_watermark_entry.grid(column=4, row=1)
-img_watermark_entry.drop_target_register(DND_ALL)
-img_watermark_entry.dnd_bind("<<Drop>>", drop_watermark_inside_entry)
-
-get_watermark_path_button = Button(text='...', command=get_watermarker_path)
-get_watermark_path_button.grid(column=6, row=1)
-
-open_img_watermark = Button(text='Open', command=load_watermark_img)
-open_img_watermark.grid(column=7, row=1)
+check_repeat.grid(column=7, row=5, columnspan=2)
 
 #Keeps track of mouse pos when pressing lmb (used for the drag and drop function for the watermark)
 active_img.img_label.bind("<B1-Motion>", move_watermark)
 
 #Save---------------------
-save_button = Button(text='Save', command=save_watermark)
-save_button.grid(column=8, row=0)
 
-#TODO ADD FONT STYLE AND COLOR OPTIONS
-#TODO ADD WATERMARK IMAGE SIZE SLIDER/MULTIPLIER/SIZE ENTRY
-#TODO ADD OPACITY SLIDER (BASED ON 128 AS MID VALUE) GOES FROM 0 TO 1? MAYBE
+save_spacer = Label(window, width=24, background=BACKGROUND_COLOR)
+save_spacer.grid(column=1, row=7, columnspan=9)
+
+save_button = Button(text='Save', command=save_watermark, width=10)
+save_button.grid(column=1, row=8, columnspan=9)
 
 window.mainloop()
