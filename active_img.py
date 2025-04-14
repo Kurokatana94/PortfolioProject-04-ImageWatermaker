@@ -1,7 +1,15 @@
 from tkinter import *
 from PIL import ImageTk, Image
 import urllib.request
-import io
+import io, sys, os
+
+#Function to get absolute path of the placeholder image from the system
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 def resize_image_to_frame(img, frame_width, frame_height, bg_color):
     img_ratio = img.width / img.height
@@ -27,11 +35,11 @@ def resize_image_to_frame(img, frame_width, frame_height, bg_color):
 
 
 class ActiveImg:
-    def __init__(self, frame_width, frame_height, bg_color, frame, img_path ="./nwero_likey.jpg"):
+    def __init__(self, frame_width, frame_height, bg_color, frame, img_path=None):
         self._FRAME_WIDTH = frame_width
         self._FRAME_HEIGHT = frame_height
         self._BG_COLOR = bg_color
-        self.img_path = img_path
+        self.img_path = resource_path(os.path.join("docs", "nwero_likey.jpg"))
         self.img_frame = frame
         self.img = None
         self.img_label = None
